@@ -10,36 +10,42 @@ public class Ch11_ECB_CBC_DetectionOracle {
 	
 	public static byte[] key = CipherUtils.getRandomIV(16); //generate random key 
 	
+	
+	public static byte[] appendBytes(byte[] inputBytes) {
+		String prefixString = "Hood!CCCAAAAAAAA";
+		String suffixString = "Hood!AAACCCAAAAA";
+		
+		int randomPrefixBytes = (new Random().nextInt(key.length-1));
+		int randomSuffixBytes = key.length - randomPrefixBytes;
+		byte[] alteredBytes = new byte[inputBytes.length+key.length];
+		
+		//add necessary bytes of prefix
+		System.arraycopy(prefixString.getBytes(), 0, alteredBytes, 0, randomPrefixBytes);
+		System.arraycopy(inputBytes, 0, alteredBytes, randomPrefixBytes, inputBytes.length);
+		System.arraycopy(suffixString.getBytes(), 0, alteredBytes, randomPrefixBytes+inputBytes.length, randomSuffixBytes);
+		//new String(alteredBytes);
+		return alteredBytes;
+	}
+	
 	public static byte[] mockEncryptingBox(byte[] inputBytes) throws Exception {
 		int chooseMode = (new Random().nextInt() % 2);
 		String algo = "AES", padding = "NoPadding";
 		String mode = algo+"/"+((chooseMode == 0)?"ECB":"CBC")+"/"+padding;
 		//System.out.println("mode used : " + mode);
 		Cipher cipher = CipherUtils.getCipher(algo, mode, true, key);
+		inputBytes = appendBytes(inputBytes);
 		byte[] encryptedBytes = cipher.doFinal(inputBytes);
 		return encryptedBytes;
 	}
 	
 	public static int detectAESMode(byte[] plainTextBytes) {
-		String commonString = "Hood!CCCAAAAAAAA";
-		String prefix, suffix;
-		prefix = suffix = commonString;
-		try {
-			//compute necessary bytes of prefix to be added
-			int prefixBytesNeeded = key.length - (plainTextBytes.length % key.length);
-			byte[] prefixedBytes = new byte[plainTextBytes.length+prefixBytesNeeded+32];
-			
-			//add necessary bytes of prefix
-			System.arraycopy(prefix.getBytes(), 0, prefixedBytes, 0, prefix.length());
-			System.arraycopy(plainTextBytes, 0, prefixedBytes, prefix.length(), plainTextBytes.length);
-			System.arraycopy(suffix.getBytes(), 0, prefixedBytes, prefix.length()+plainTextBytes.length+prefixBytesNeeded, suffix.length());
-			
+		try {			
 			//fetch encrypted bytes of the prefixed bytes
-			byte[] encryptBytes = mockEncryptingBox(prefixedBytes);
+			byte[] encryptBytes = mockEncryptingBox(plainTextBytes);
 			
 			//fetch cipher text of prefix & suffix bytes
-			byte[] fetchPrefixBytes = Arrays.copyOfRange(encryptBytes, 0, prefix.length());
-			byte[] fetchSuffixBytes = Arrays.copyOfRange(encryptBytes, prefix.length()+plainTextBytes.length+prefixBytesNeeded, encryptBytes.length);
+			byte[] fetchPrefixBytes = Arrays.copyOfRange(encryptBytes, 16, 32);
+			byte[] fetchSuffixBytes = Arrays.copyOfRange(encryptBytes, 32, 48);
 			
 			//if they are same, the it is ECB
 			if(Arrays.equals(fetchPrefixBytes,fetchSuffixBytes)) return 0;
@@ -51,8 +57,9 @@ public class Ch11_ECB_CBC_DetectionOracle {
 		}
 		return 0;
 	}
+	
 	public static void main(String[] args) {
-		byte[] plainTextBytes = "Test Text".getBytes();
+		byte[] plainTextBytes = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".getBytes();
 		int mode = detectAESMode(plainTextBytes);
 		System.out.println("Random pick was : " + ((mode == 0) ? "ECB mode" : "CBC mode"));
 	}
